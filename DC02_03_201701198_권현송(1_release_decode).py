@@ -14,7 +14,7 @@ from termcolor import cprint
 from pyfiglet import figlet_format
 
 HANDSHAKE_START_HZ = 1020
-HANDSHAKE_END_HZ = 1020+512
+HANDSHAKE_END_HZ = 1540
 
 START_HZ = 1024
 STEP_HZ = 256
