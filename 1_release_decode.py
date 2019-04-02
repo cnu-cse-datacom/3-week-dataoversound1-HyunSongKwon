@@ -13,8 +13,8 @@ from reedsolo import RSCodec, ReedSolomonError
 from termcolor import cprint
 from pyfiglet import figlet_format
 
-HANDSHAKE_START_HZ = 4096
-HANDSHAKE_END_HZ = 5120 + 1024
+HANDSHAKE_START_HZ = 1020
+HANDSHAKE_END_HZ = 1020+512
 
 START_HZ = 1024
 STEP_HZ = 256
@@ -120,41 +120,54 @@ def display(s):
 
 def listen_linux(frame_rate=44100, interval=0.1):
 
-    mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL, device="default")
+    mic = alsaaudio.PCM(alsaaudio.PCM_CAPTURE, alsaaudio.PCM_NORMAL)
     mic.setchannels(1)
     mic.setrate(44100)
     mic.setformat(alsaaudio.PCM_FORMAT_S16_LE)
 
     num_frames = int(round((interval / 2) * frame_rate))
+
     mic.setperiodsize(num_frames)
     print("start...")
 
     in_packet = False
+    ch_next = False
     packet = []
 
+
     while True:
+
         l, data = mic.read()
         if not l:
             continue
 
-        chunk = np.fromstring(data, dtype=np.int16)
-        dom = dominant(frame_rate, chunk)
+        chunk = np.fromstring(data, dtype=np.int16)#convert voice to bit with each tone
+        dom = dominant(frame_rate, chunk)#Fourier Transfer: back to original
+        #print(dom);
 
-        if in_packet and match(dom, HANDSHAKE_END_HZ):
+        #print(dom)
+        if in_packet and ch_next and dom<1000:#abs(HAND - dom)
+            packet.pop()
             byte_stream = extract_packet(packet)
-            try:
-                byte_stream = RSCodec(FEC_BYTES).decode(byte_stream)
-                byte_stream = byte_stream.decode("utf-8")
+            print("original code", byte_stream)
 
+            try:  # check errors
+                byte_stream = RSCodec(FEC_BYTES).decode(byte_stream)  # reed solo
+                byte_stream = byte_stream.decode("utf-8")
                 display(byte_stream)
+                display("")
             except ReedSolomonError as e:
-                pass
-                #print("{}: {}".format(e, byte_stream))
+                print("{}: {}".format(e, byte_stream))
 
             packet = []
             in_packet = False
+            ch_next=False
+
         elif in_packet:
             packet.append(dom)
+            if match(dom, HANDSHAKE_END_HZ):
+                ch_next=True
+
         elif match(dom, HANDSHAKE_START_HZ):
             in_packet = True
 
